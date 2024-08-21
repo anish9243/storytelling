@@ -1,0 +1,119 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Interactive Storytelling Platform
+    link(rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css")
+    style.
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .story-input, .story-display {
+        margin-bottom: 20px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+      }
+      .audio-player, .related-books {
+        margin-top: 20px;
+      }
+  body
+    .container
+      h1.text-center.mb-4 Interactive Storytelling Platform
+      .row
+        .col-md-6
+          .story-input
+            h2 Story Input Section
+            .form-group
+              textarea#storyText.form-control(rows="10" placeholder="Enter your story here...")
+            button.btn.btn-primary.btn-block#generateStory.mt-2 Generate Story
+        .col-md-6
+          .story-display
+            h2 Story Display Section
+            .audio-player
+              h3 Text-to-Speech Player
+              audio#audioPlayer(controls).w-100
+                source(src='', type='audio/mp3')
+            .audio-player.mt-4
+              h3 Background Music Player
+              audio#musicPlayer(controls).w-100
+                source(src='', type='audio/mp3')
+            .related-books.mt-4
+              h3 Related Books Section
+              ul#bookList.list-group
+                li.list-group-item No related books found.
+    include footer.pug 
+    script(src='https://code.jquery.com/jquery-3.3.1.slim.min.js')
+    script(src='https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js')
+    script.
+      document.getElementById('generateStory').addEventListener('click', async () => {
+        const text = document.getElementById('storyText').value;
+
+        // Generate Text-to-Speech
+        const ttsResponse = await fetch('/tts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ text })
+        });
+        const ttsAudio = await ttsResponse.text();
+        const audioPlayer = document.getElementById('audioPlayer');
+        audioPlayer.querySelector('source').src = ttsAudio;
+        audioPlayer.load();
+
+        // Fetch Background Music
+        const musicResponse = await fetch('/background-music?type=jungle'); // Example: Fetching jungle sounds
+        const musicData = await musicResponse.json();
+        if (musicData.track) {
+          const musicPlayer = document.getElementById('musicPlayer');
+          musicPlayer.querySelector('source').src = musicData.track;
+          musicPlayer.load();
+          musicPlayer.volume = 0.6; // Set volume to 20%
+          playBoth(audioPlayer, musicPlayer); // Function to play both audios simultaneously
+        } else {
+          alert('No background music available');
+        }
+
+        // Play both audios simultaneously
+        function playBoth(audioPlayer, musicPlayer) {
+          Promise.all([
+            new Promise((resolve) => audioPlayer.oncanplaythrough = resolve),
+            new Promise((resolve) => musicPlayer.oncanplaythrough = resolve)
+          ]).then(() => {
+            audioPlayer.play();
+            musicPlayer.play();
+          });
+        }
+
+        // Fetch Related Books
+        try {
+          // Extracting keywords from the text
+          const keywords = text.match(/\b(\w+)\b/g).slice(0, 5).join(' ');
+          const booksResponse = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(keywords)}`);
+          const booksData = await booksResponse.json();
+          const bookList = document.getElementById('bookList');
+          bookList.innerHTML = ''; // Clear previous results
+
+          if (booksData.docs.length > 0) {
+            booksData.docs.slice(0, 5).forEach(book => { // Limit to 5 books
+              const li = document.createElement('li');
+              li.className = 'list-group-item';
+              li.textContent = book.title + ' by ' + (book.author_name ? book.author_name.join(', ') : 'Unknown Author');
+              bookList.appendChild(li);
+            });
+          } else {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.textContent = 'No related books found.';
+            bookList.appendChild(li);
+          }
+        } catch (error) {
+          console.error('Error fetching related books:', error);
+          const bookList = document.getElementById('bookList');
+          bookList.innerHTML = '<li class="list-group-item">Error fetching related books.</li>';
+        }
+      });
